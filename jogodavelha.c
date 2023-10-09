@@ -1,194 +1,152 @@
-#include <stdio.h>
-#include <stdlib.h>
+#include <gtk/gtk.h>
 
-// variáveis globais
-char jogo[3][3]; // matriz do jogo
-int l, c; // índices para linha e coluna
+typedef enum {
+    EMPTY,
+    PLAYER_X,
+    PLAYER_O
+} CellState;
 
-// procedimento para inicializar todas as posições da matriz com um espaço
-void inicializarMatriz(){
-    for(l = 0; l < 3; l++){
-        for(c = 0; c < 3; c++)
-            jogo[l][c] = ' ';
+CellState board[3][3];
+int playerXWins = 0;
+int playerOWins = 0;
+bool playerXTurn = true;
+GtkWidget *labels[3][3];
+
+static void button_click(GtkButton *button, gpointer user_data) {
+    if (gtk_button_get_label(button)[0] != ' ' || !playerXTurn)
+        return;
+
+    gtk_button_set_label(button, "X");
+    gtk_widget_set_sensitive(GTK_WIDGET(button), FALSE);
+
+    int row = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(button), "row"));
+    int col = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(button), "col"));
+    board[row][col] = PLAYER_X;
+
+    if (check_winner(PLAYER_X)) {
+        g_print("Jogador X venceu!\n");
+        playerXWins++;
+        update_score();
+        reset_board();
+        return;
+    } else if (is_board_full()) {
+        g_print("Empate!\n");
+        reset_board();
+        return;
     }
+
+    playerXTurn = false;
 }
 
-// procedimento para imprimir o jogo na tela
-void imprimir(){
-    printf("\n\n\t 0   1   2\n\n");
-    for(l = 0; l < 3; l++){
-        for(c = 0; c < 3; c++){
-            if(c == 0)
-                printf("\t");
-            printf(" %c ", jogo[l][c]);
-            if(c < 2)
-                printf("|");
-            if(c == 2)
-                printf("   %d", l);
+static void computer_play() {
+    if (is_board_full())
+        return;
+
+    int row, col;
+    do {
+        row = rand() % 3;
+        col = rand() % 3;
+    } while (board[row][col] != EMPTY);
+
+    board[row][col] = PLAYER_O;
+    char label[2];
+    snprintf(label, sizeof(label), "O");
+    gtk_button_set_label(GTK_BUTTON(labels[row][col]), label);
+    gtk_widget_set_sensitive(labels[row][col], FALSE);
+
+    if (check_winner(PLAYER_O)) {
+        g_print("Jogador O venceu!\n");
+        playerOWins++;
+        update_score();
+        reset_board();
+        return;
+    } else if (is_board_full()) {
+        g_print("Empate!\n");
+        reset_board();
+        return;
+    }
+
+    playerXTurn = true;
+}
+
+static void update_score() {
+    char score_text[50];
+    snprintf(score_text, sizeof(score_text), "Placar - Jogador X: %d, Jogador O: %d", playerXWins, playerOWins);
+    gtk_label_set_text(GTK_LABEL(labels[0][3]), score_text);
+}
+
+static gboolean check_winner(CellState player) {
+    for (int i = 0; i < 3; i++) {
+        if (board[i][0] == player && board[i][1] == player && board[i][2] == player)
+            return TRUE;
+        if (board[0][i] == player && board[1][i] == player && board[2][i] == player)
+            return TRUE;
+    }
+
+    if (board[0][0] == player && board[1][1] == player && board[2][2] == player)
+        return TRUE;
+    if (board[0][2] == player && board[1][1] == player && board[2][0] == player)
+        return TRUE;
+
+    return FALSE;
+}
+
+static gboolean is_board_full() {
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            if (board[i][j] == EMPTY)
+                return FALSE;
         }
-        printf("\n");
-        if(l < 2)
-            printf("\t-----------\n");
     }
+    return TRUE;
 }
 
-/*
-    função para verificar vitória do jogador c na linha l
-    1 - ganhou
-    0 - não ganhou ainda
-*/
-int ganhouPorLinha(int l, char c){
-    if(jogo[l][0] == c && jogo[l][1] == c && jogo[l][2] == c)
-        return 1;
-    else
-        return 0;
-}
-
-/*
-    função para verificar vitória do jogador c nas linhas
-    1 - ganhou
-    0 - não ganhou ainda
-*/
-int ganhouPorLinhas(char c){
-    int ganhou = 0;
-    for(l = 0; l < 3; l++){
-        ganhou += ganhouPorLinha(l, c);
-    }
-    return ganhou;
-}
-
-/*
-    função para verificar vitória do jogador j na coluna c
-    1 - ganhou
-    0 - não ganhou ainda
-*/
-int ganhouPorColuna(int c, char j){
-    if(jogo[0][c] == j && jogo[1][c] == j && jogo[2][c] == j)
-        return 1;
-    else
-        return 0;
-}
-
-/*
-    função que verifica vitória do jogador j por colunas
-    1 - ganhou
-    0 - não ganhou ainda
-*/
-int ganhouPorColunas(char j){
-    int ganhou = 0;
-    for(c = 0; c < 3; c++){
-        ganhou += ganhouPorColuna(c, j);
-    }
-    return ganhou;
-}
-
-/*
-    função para verificar vitória do jogador c na diagonal principal
-    1 - vitória
-    0 - não ganhou
-*/
-int ganhouPorDiagPrin(char c){
-    if(jogo[0][0] == c && jogo[1][1] == c && jogo[2][2] == c)
-        return 1;
-    else
-        return 0;
-}
-
-/*
-    função para verificar vitória do jogador c na diagonal secundária
-    1 - vitória
-    0 - não ganhou
-*/
-int ganhouPorDiagSec(char c){
-    if(jogo[0][2] == c && jogo[1][1] == c && jogo[2][0] == c)
-        return 1;
-    else
-        return 0;
-}
-
-/*
-    função que diz se uma coordenada é válida ou não
-    1 - é válida
-    0 - não é válida
-*/
-int ehValida(int l, int c){
-    if(l >= 0 && l < 3 && c >= 0 && c < 3 && jogo[l][c] == ' ')
-        return 1;
-    else
-        return 0;
-}
-
-// procedimento para ler as coordenadas digitadas pelo jogador
-void lerCoordenadas(char j){
-    int linha, coluna;
-
-    printf("Digite linha e coluna: ");
-    scanf("%d%d", &linha, &coluna);
-
-    while(ehValida(linha, coluna) == 0){
-        printf("Coordenadas invalidas! Digite outra linha e coluna: ");
-        scanf("%d%d", &linha, &coluna);
-    }
-    jogo[linha][coluna] = j;
-}
-
-// função que retorna a quantidade de posições ainda vazias (não jogadas)
-int quantVazias(){
-    int quantidade = 0;
-
-    for(l = 0; l < 3; l++){
-        for(c = 0; c < 3; c++)
-            if(jogo[l][c] == ' ')
-                quantidade++;
-    }
-    return quantidade;
-}
-
-// procedimento jogar com o loop (repetição) principal do jogo
-void jogar(){
-    int jogador = 1, vitoriaX = 0, vitoria0 = 0;
-    char jogador1 = 'X', jogador2 = '0';
-
-    do{
-        imprimir();
-        if(jogador == 1){
-            lerCoordenadas(jogador1);
-            jogador++;
-            vitoriaX += ganhouPorLinhas(jogador1);
-            vitoriaX += ganhouPorColunas(jogador1);
-            vitoriaX += ganhouPorDiagPrin(jogador1);
-            vitoriaX += ganhouPorDiagSec(jogador1);
+static void reset_board() {
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            board[i][j] = EMPTY;
+            gtk_button_set_label(GTK_BUTTON(labels[i][j]), " ");
+            gtk_widget_set_sensitive(labels[i][j], TRUE);
         }
-        else{
-            lerCoordenadas(jogador2);
-            jogador = 1;
-            vitoria0 += ganhouPorLinhas(jogador2);
-            vitoria0 += ganhouPorColunas(jogador2);
-            vitoria0 += ganhouPorDiagPrin(jogador2);
-            vitoria0 += ganhouPorDiagSec(jogador2);
-        }
-    }while(vitoriaX == 0 && vitoria0 == 0 && quantVazias() > 0);
+    }
 
-    imprimir();
-
-    if(vitoria0 == 1)
-        printf("\nParabens Jogador 2. Voce venceu!!!\n");
-    else if(vitoriaX == 1)
-        printf("\nParabens Jogador 1. Voce venceu!!!\n");
-    else
-        printf("\nQue pena. Perderam!!!\n");
+    if (!playerXTurn)
+        computer_play();
 }
 
-int main(){
-    int opcao;
+int main(int argc, char *argv[]) {
+    gtk_init(&argc, &argv);
 
-    do{
-        inicializarMatriz();
-        jogar();
+    GtkWidget *window;
+    GtkWidget *grid;
+    GtkWidget *button;
 
-        printf("\nDigite 1 para jogar novamente: ");
-        scanf("%d", &opcao);
-    }while(opcao == 1);
+    window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(window), "Jogo da Velha");
+    gtk_window_set_default_size(GTK_WINDOW(window), 300, 300);
+    g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+
+    grid = gtk_grid_new();
+    gtk_container_add(GTK_CONTAINER(window), grid);
+
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            button = gtk_button_new_with_label(" ");
+            g_object_set_data(G_OBJECT(button), "row", GINT_TO_POINTER(i));
+            g_object_set_data(G_OBJECT(button), "col", GINT_TO_POINTER(j));
+            g_signal_connect(button, "clicked", G_CALLBACK(button_click), NULL);
+            labels[i][j] = button;
+            gtk_grid_attach(GTK_GRID(grid), button, j, i, 1, 1);
+        }
+    }
+
+    GtkWidget *score_label = gtk_label_new("");
+    gtk_grid_attach(GTK_GRID(grid), score_label, 0, 3, 3, 1);
+    labels[0][3] = score_label;
+
+    gtk_widget_show_all(window);
+
+    gtk_main();
 
     return 0;
 }
